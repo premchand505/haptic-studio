@@ -90,4 +90,17 @@ export class JobsService {
 
     return newJob;
   }
+
+  async findAll() {
+    // NOTE: Later, this will be filtered by the authenticated user's ID.
+    // For now, we fetch all jobs for our test user.
+    return this.prisma.job.findMany({
+      where: {
+        userId: 1, // Hardcoded for now
+      },
+      orderBy: {
+        createdAt: 'desc', // Show the newest jobs first
+      },
+    });
+  }
 }

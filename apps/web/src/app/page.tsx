@@ -1,12 +1,11 @@
 // apps/web/src/app/page.tsx
-import UploadForm from "../app/components/UploadForm";
+import AuthForm from "@/components/AuthForm";
 
 export default function HomePage() {
   return (
     <main>
       <h1>Haptic Studio</h1>
-      <p>AI-Powered Haptic Feedback Generation</p>
-      <UploadForm />
+      <AuthForm />
     </main>
   );
 }

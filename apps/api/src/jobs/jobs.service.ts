@@ -1,88 +1,66 @@
 // apps/api/src/jobs/jobs.service.ts
-import { Injectable, InternalServerErrorException } from '@nestjs/common'; // <-- Import exception
+
+import { Injectable, InternalServerErrorException, NotFoundException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../prisma/prisma.service';
 import { PubSubService } from '../pubsub/pubsub.service';
 import { CreateJobDto } from './dto/create-job.dto';
-import { Storage } from '@google-cloud/storage'; // <-- Import Storage
+import { Storage } from '@google-cloud/storage';
 import { GenerateUploadUrlDto } from './dto/generate-upload-url.dto';
+import { UpdateJobDto } from './dto/update-job.dto';
 
 @Injectable()
 export class JobsService {
-  private readonly storage: Storage; // <-- Add storage property
+  private readonly storage: Storage;
   private readonly bucketName: string;
 
   constructor(
     private prisma: PrismaService,
     private pubsubService: PubSubService,
     private configService: ConfigService,
-  ) 
-
-
-{
-    // Initialize Storage client from the credentials in the .env file
+  ) {
     this.storage = new Storage({
-        projectId: this.configService.get<string>('GOOGLE_CLOUD_PROJECT_ID'),
-        keyFilename: this.configService.get<string>('GOOGLE_APPLICATION_CREDENTIALS'),
+      projectId: this.configService.get<string>('GOOGLE_CLOUD_PROJECT_ID'),
+      keyFilename: this.configService.get<string>('GOOGLE_APPLICATION_CREDENTIALS'),
     });
 
     const bucketName = this.configService.get<string>('GCS_INPUT_BUCKET');
     if (!bucketName) {
-      // This stops the application from starting if the bucket name isn't configured.
       throw new Error('GCS_INPUT_BUCKET environment variable not set!');
     }
     this.bucketName = bucketName;
-  
-    
   }
 
-  // Method to generate the pre-signed URL
   async generateUploadUrl(generateUploadUrlDto: GenerateUploadUrlDto) {
+    // ... (This method remains the same)
     const { filename, contentType } = generateUploadUrlDto;
-
     const options = {
       version: 'v4' as const,
       action: 'write' as const,
-      expires: Date.now() + 15 * 60 * 1000, // 15 minutes
+      expires: Date.now() + 15 * 60 * 1000,
       contentType,
     };
-
     const [url] = await this.storage
       .bucket(this.bucketName)
       .file(filename)
       .getSignedUrl(options);
-
     return { url };
   }
 
-  async create(createJobDto: CreateJobDto) {
-    // ... (user upsert logic remains the same)
-    await this.prisma.user.upsert({
-        where: { id: 1 },
-        update: {},
-        create: {
-            id: 1,
-            email: 'testuser@example.com',
-            password: 'password'
-        }
-    });
-
+  // <-- FIX: Method now accepts userId and no longer creates a temporary user
+  async create(createJobDto: CreateJobDto, userId: number) {
     const newJob = await this.prisma.job.create({
       data: {
         videoFilename: createJobDto.videoFilename,
-        userId: 1,
+        userId: userId, // Use the real user ID from the token
       },
     });
 
-    // Get the topic ID from environment variables
     const topicId = this.configService.get<string>('PUB_SUB_TOPIC_ID');
-
-    // <-- FIX IS HERE: Validate that the environment variable exists
     if (!topicId) {
       throw new InternalServerErrorException('Server configuration error: Pub/Sub topic ID not set.');
     }
 
-    // Now TypeScript knows topicId is a string, so the error is gone.
     await this.pubsubService.publishMessage(topicId, {
       jobId: newJob.id,
       videoFilename: newJob.videoFilename,
@@ -91,15 +69,29 @@ export class JobsService {
     return newJob;
   }
 
-  async findAll() {
-    // NOTE: Later, this will be filtered by the authenticated user's ID.
-    // For now, we fetch all jobs for our test user.
+  // <-- FIX: Method now accepts userId to filter jobs correctly
+  async findAll(userId: number) {
     return this.prisma.job.findMany({
       where: {
-        userId: 1, // Hardcoded for now
+        userId: userId, // Use the real user ID to fetch only their jobs
       },
       orderBy: {
-        createdAt: 'desc', // Show the newest jobs first
+        createdAt: 'desc',
+      },
+    });
+  }
+
+  async update(id: string, updateJobDto: UpdateJobDto) {
+    // ... (This method remains the same)
+    const job = await this.prisma.job.findUnique({ where: { id } });
+    if (!job) {
+      throw new NotFoundException(`Job with ID ${id} not found.`);
+    }
+    return this.prisma.job.update({
+      where: { id },
+      data: {
+        status: updateJobDto.status,
+        outputUrl: updateJobDto.outputUrl,
       },
     });
   }

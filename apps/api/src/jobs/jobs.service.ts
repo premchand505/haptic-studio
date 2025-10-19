@@ -1,6 +1,6 @@
 // apps/api/src/jobs/jobs.service.ts
 
-import { Injectable, InternalServerErrorException, NotFoundException } from '@nestjs/common';
+import { Injectable, InternalServerErrorException, NotFoundException ,BadRequestException ,UnauthorizedException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../prisma/prisma.service';
 import { PubSubService } from '../pubsub/pubsub.service';
@@ -45,6 +45,47 @@ export class JobsService {
       .file(filename)
       .getSignedUrl(options);
     return { url };
+  }
+
+  async generateDownloadUrls(jobId: string, userId: number) {
+    const job = await this.prisma.job.findUnique({ where: { id: jobId } });
+
+    if (!job) {
+      throw new NotFoundException(`Job with ID ${jobId} not found.`);
+    }
+    if (job.userId !== userId) {
+      throw new UnauthorizedException('You are not authorized to access this job.');
+    }
+    if (job.status !== 'COMPLETED' || !job.outputUrl) {
+      throw new BadRequestException('Job is not yet complete or has no output.');
+    }
+
+    const urlParts = job.outputUrl.replace('gs://', '').split('/');
+    const bucketName = urlParts[0];
+    const prefix = urlParts.slice(1).join('/');
+
+    const filesToSign = ['haptic.json', 'haptic.ahap'];
+    const urls: { [key: string]: string } = {};
+
+    for (const filename of filesToSign) {
+      // This is the key change. We add a contentDisposition header.
+      // This tells the browser: "Treat this file as an attachment for download".
+      const options = {
+        version: 'v4' as const,
+        action: 'read' as const,
+        expires: Date.now() + 15 * 60 * 1000, // 15 minutes
+        contentDisposition: `attachment; filename="${filename}"`, // <-- THE FIX
+      };
+
+      const [url] = await this.storage
+        .bucket(bucketName)
+        .file(`${prefix}${filename}`)
+        .getSignedUrl(options);
+        
+      urls[filename.split('.')[1]] = url;
+    }
+
+    return urls;
   }
 
   // <-- FIX: Method now accepts userId and no longer creates a temporary user

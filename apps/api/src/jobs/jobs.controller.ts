@@ -23,6 +23,15 @@ export class JobsController {
     return this.jobsService.findAll(user.id);
   }  
 
+  // --- 🚀 NEW ENDPOINT STARTS HERE 🚀 ---
+  @UseGuards(JwtAuthGuard)
+  @Get(':id/download-urls')
+  generateDownloadUrls(@Param('id') id: string, @Req() req: Request) {
+    const user = req.user as { id: number };
+    return this.jobsService.generateDownloadUrls(id, user.id);
+  }
+  // --- 🚀 NEW ENDPOINT ENDS HERE 🚀 ---
+
   @UseGuards(JwtAuthGuard)
   @Post()
   // <-- FIX: Merged into one method that gets the user from the request

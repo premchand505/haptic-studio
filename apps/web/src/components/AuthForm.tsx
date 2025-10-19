@@ -2,6 +2,7 @@
 'use client';
 
 import { useState, FormEvent } from 'react';
+import { useAuth } from '@/context/AuthContext';
 
 export default function AuthForm() {
   const [isLoginMode, setIsLoginMode] = useState(true);
@@ -9,7 +10,7 @@ export default function AuthForm() {
   const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
-
+  const { login } = useAuth(); //
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
     setError(null);
@@ -18,9 +19,31 @@ export default function AuthForm() {
     const endpoint = isLoginMode ? '/auth/login' : '/auth/signup';
     const url = `http://localhost:3000${endpoint}`;
 
-    // NOTE: We will handle the response and token storage in the next step.
-    console.log(`Submitting to ${url} with`, { email, password });
-    setMessage('Submitting...');
+    try {
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, password }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.message || 'Something went wrong');
+      }
+
+      if (isLoginMode) {
+        // If login is successful, the API returns a token.
+        // We use our context's login function to store it globally.
+        login(data.access_token);
+      } else {
+        // If signup is successful, show a message.
+        setMessage('Sign up successful! Please log in.');
+        setIsLoginMode(true); // Switch to login mode
+      }
+    } catch (err: any) {
+      setError(err.message);
+    }
   };
 
   return (

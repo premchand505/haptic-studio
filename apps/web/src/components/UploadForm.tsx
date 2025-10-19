@@ -2,6 +2,7 @@
 'use client'; 
 
 import { useState, FormEvent } from 'react';
+import { useAuth } from '@/context/AuthContext'; //
 
 // Define a more robust status type to track the full process
 type UploadStatus = 'initial' | 'uploading' | 'creating_job' | 'success' | 'error';
@@ -13,6 +14,7 @@ export default function UploadForm() {
   const [error, setError] = useState<string | null>(null);
   // FIX 2: Add state to hold the ID of the created job
   const [jobId, setJobId] = useState<string | null>(null);
+  const { token } = useAuth();
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files) {
@@ -37,7 +39,9 @@ export default function UploadForm() {
       // Step 1: Get the pre-signed URL from our API
       const urlResponse = await fetch('http://localhost:3000/jobs/upload-url', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+         },
         body: JSON.stringify({ filename: file.name, contentType: file.type }),
       });
       if (!urlResponse.ok) throw new Error('Failed to get pre-signed URL.');
@@ -57,7 +61,9 @@ export default function UploadForm() {
       // Step 3: After successful upload, create the job record in our database
       const createJobResponse = await fetch('http://localhost:3000/jobs', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: { 'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`,
+           },
           body: JSON.stringify({ videoFilename: file.name }),
       });
       if (!createJobResponse.ok) throw new Error('Failed to create job record.');

@@ -1,7 +1,9 @@
 // apps/web/src/components/JobsDashboard.tsx
+// This is the complete, correct code for this file.
 'use client';
 
 import { useState, useEffect } from 'react';
+import { useAuth } from '@/context/AuthContext';
 
 interface Job {
   id: string;
@@ -14,13 +16,30 @@ export default function JobsDashboard() {
   const [jobs, setJobs] = useState<Job[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const { token } = useAuth();
 
   useEffect(() => {
+    // Do not fetch if the user is not logged in.
+    if (!token) {
+      setIsLoading(false);
+      return;
+    }
+
     const fetchJobs = async () => {
-      // We don't need the initial loading state for background refreshes
-      // setIsLoading(true); 
+      setError(null); // Clear previous errors
       try {
-        const response = await fetch('http://localhost:3000/jobs');
+        const response = await fetch('http://localhost:3000/jobs', {
+          headers: {
+            'Authorization': `Bearer ${token}`,
+          },
+        });
+
+        if (response.status === 401) {
+          // Handle cases where token might be expired
+          setError('Authentication failed. Please log out and log back in.');
+          return;
+        }
+
         if (!response.ok) {
           throw new Error('Failed to fetch jobs.');
         }
@@ -29,28 +48,20 @@ export default function JobsDashboard() {
       } catch (err: any) {
         setError(err.message);
       } finally {
-        // Only set loading to false on the very first fetch
         if (isLoading) {
           setIsLoading(false);
         }
       }
     };
 
-    // --- 🚀 NEW CODE STARTS HERE 🚀 ---
+    fetchJobs(); // Fetch immediately
+    const intervalId = setInterval(fetchJobs, 3000); // And then poll every 3 seconds
 
-    // 1. Fetch data immediately when the component loads
-    fetchJobs();
-
-    // 2. Then, set up an interval to fetch data every 3 seconds (3000ms)
-    const intervalId = setInterval(fetchJobs, 3000);
-
-    // 3. This is a cleanup function. React runs this when the component
-    //    is removed from the page to prevent memory leaks.
+    // Cleanup function to stop polling when the component unmounts or token changes
     return () => clearInterval(intervalId);
-    
-    // --- 🚀 NEW CODE ENDS HERE 🚀 ---
 
-  }, [isLoading]); // Re-added isLoading to the dependency array for the initial load logic
+    // <-- FIX: The effect now depends on the token. It will re-run on login/logout.
+  }, [token, isLoading]);
 
   if (isLoading) {
     return <p>Loading jobs...</p>;

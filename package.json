@@ -1,0 +1,17 @@
+{
+  "name": "haptic-studio",
+  "version": "1.0.0",
+  "description": "AI-Powered Haptic Feedback Generation Platform",
+  "private": true,
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "dev:web": "npm run dev --workspace=apps/web",
+    "dev:api": "npm run start:dev --workspace=apps/api",
+    "dev:worker": "npm run dev --workspace=apps/ai-worker"
+  },
+  "author": "",
+  "license": "ISC"
+}

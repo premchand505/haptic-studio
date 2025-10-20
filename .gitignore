@@ -43,7 +43,6 @@ output/
 temp/
 *.wav
 *.mp4
-*.json
 
 # ----------------------------
 # Logs and misc
@@ -91,3 +90,4 @@ coverage/
 .gcp/
 *.key.json
 gcs-cors-config.json
+haptic-studio-key-file.json

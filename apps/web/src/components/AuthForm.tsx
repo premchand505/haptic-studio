@@ -1,4 +1,3 @@
-// apps/web/src/components/AuthForm.tsx
 'use client';
 
 import { useState, FormEvent } from 'react';
@@ -10,7 +9,8 @@ export default function AuthForm() {
   const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
-  const { login } = useAuth(); //
+  const { login } = useAuth();
+
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
     setError(null);
@@ -33,16 +33,14 @@ export default function AuthForm() {
       }
 
       if (isLoginMode) {
-        // If login is successful, the API returns a token.
-        // We use our context's login function to store it globally.
         login(data.access_token);
       } else {
-        // If signup is successful, show a message.
         setMessage('Sign up successful! Please log in.');
-        setIsLoginMode(true); // Switch to login mode
+        setIsLoginMode(true);
       }
-    } catch (err: any) {
-      setError(err.message);
+    } catch (err: unknown) {
+      if (err instanceof Error) setError(err.message);
+      else setError('An unexpected error occurred.');
     }
   };
 

@@ -17,7 +17,9 @@ export default function AuthForm() {
     setMessage(null);
 
     const endpoint = isLoginMode ? '/auth/login' : '/auth/signup';
-    const url = `http://localhost:3000${endpoint}`;
+    // --- CORRECTED LINE ---
+    // Use the environment variable for the API URL
+    const url = `${process.env.NEXT_PUBLIC_API_URL}${endpoint}`;
 
     try {
       const response = await fetch(url, {

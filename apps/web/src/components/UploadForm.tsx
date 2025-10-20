@@ -30,7 +30,8 @@ export default function UploadForm() {
     setStatus('uploading');
 
     try {
-      const urlResponse = await fetch('http://localhost:3000/jobs/upload-url', {
+      // --- CORRECTED LINE ---
+      const urlResponse = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/jobs/upload-url`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -38,6 +39,7 @@ export default function UploadForm() {
         },
         body: JSON.stringify({ filename: file.name, contentType: file.type }),
       });
+
       if (!urlResponse.ok) throw new Error('Failed to get pre-signed URL.');
       const { url } = await urlResponse.json();
 
@@ -46,11 +48,13 @@ export default function UploadForm() {
         headers: { 'Content-Type': file.type },
         body: file,
       });
+
       if (!uploadResponse.ok) throw new Error('File upload to GCS failed.');
 
       setStatus('creating_job');
-
-      const createJobResponse = await fetch('http://localhost:3000/jobs', {
+      
+      // --- CORRECTED LINE ---
+      const createJobResponse = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/jobs`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -58,6 +62,7 @@ export default function UploadForm() {
         },
         body: JSON.stringify({ videoFilename: file.name }),
       });
+
       if (!createJobResponse.ok) throw new Error('Failed to create job record.');
       const newJob: { id: string } = await createJobResponse.json();
 
@@ -89,6 +94,7 @@ export default function UploadForm() {
         </button>
       </form>
 
+      
       {status === 'success' && (
         <p style={{ color: 'green' }}>
           Job created successfully! Job ID: {jobId}

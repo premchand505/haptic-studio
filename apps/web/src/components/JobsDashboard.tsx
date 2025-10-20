@@ -24,10 +24,12 @@ export default function JobsDashboard() {
     }
     const fetchJobs = async () => {
       try {
-        const response = await fetch('http://localhost:3000/jobs', {
+        // --- CORRECTED LINE ---
+        const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/jobs`, {
           headers: { Authorization: `Bearer ${token}` },
         });
         if (!response.ok) throw new Error('Failed to fetch jobs.');
+        
         const data: Job[] = await response.json();
         setJobs(data);
       } catch (err: unknown) {
@@ -48,13 +50,15 @@ export default function JobsDashboard() {
     setError(null);
 
     try {
+      // --- CORRECTED LINE ---
       const urlResponse = await fetch(
-        `http://localhost:3000/jobs/${jobId}/download-urls`,
+        `${process.env.NEXT_PUBLIC_API_URL}/jobs/${jobId}/download-urls`,
         { headers: { Authorization: `Bearer ${token}` } },
       );
+
       if (!urlResponse.ok) throw new Error('Could not get download links.');
       const urls: { json: string; ahap: string } = await urlResponse.json();
-
+      
       const urlToFetch = fileType === 'json' ? urls.json : urls.ahap;
       const filename = `haptic-${jobId}.${fileType}`;
 

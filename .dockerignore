@@ -1,0 +1,33 @@
+.dockerignore
+
+# Git files
+.git
+.github
+
+# Node dependencies - we will install these fresh inside the container
+node_modules
+apps/*/node_modules
+packages/*/node_modules
+
+# Python virtual environment
+.venv
+__pycache__
+
+# Build outputs and caches
+dist
+.next
+out
+*.tsbuildinfo
+
+# IDE / OS specific files
+.vscode
+.idea
+*.swp
+.DS_Store
+
+# Log and secret files
+*.log
+*.key.json
+gcs-cors-config.json
+.env
+.env*.local

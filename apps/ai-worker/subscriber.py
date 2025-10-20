@@ -1,6 +1,3 @@
-# apps/ai-worker/subscriber.py
-# This is the complete, final, and definitively correct version of this file.
-
 import os
 import json
 import asyncio
@@ -10,15 +7,37 @@ from google.cloud import pubsub_v1
 from concurrent.futures import TimeoutError
 from services.audio_processor import HapticGenerator
 
-# --- Load Configuration ---
-load_dotenv()
+# --- Universal Configuration Loader ---
+# This block makes the app work BOTH locally and in Cloud Run.
+
+# Check if we are running in a Cloud Run environment
+# 'K_SERVICE' is an env var automatically set by Cloud Run.
+IS_IN_PRODUCTION = os.getenv('K_SERVICE')
+
+if not IS_IN_PRODUCTION:
+    # We are running locally. Load .env file.
+    print("Running in LOCAL mode. Loading .env file...")
+    load_dotenv()
+    
+    # We also need to explicitly point to our local key file
+    key_path = os.getenv("GOOGLE_APPLICATION_CREDENTIALS")
+    if key_path:
+        os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = key_path
+        print(f"Local key file set: {key_path}")
+    else:
+        print("WARNING: GOOGLE_APPLICATION_CREDENTIALS not set in .env")
+else:
+    print("Running in PRODUCTION (Cloud Run) mode. Using attached service account.")
+# --- End of Configuration Loader ---
+
+
+# --- Load Configuration from Environment ---
 GCP_PROJECT_ID = os.getenv("GCP_PROJECT_ID")
 SUBSCRIPTION_ID = os.getenv("PUB_SUB_SUBSCRIPTION_ID")
 INPUT_BUCKET = os.getenv("GCS_INPUT_BUCKET")
 OUTPUT_BUCKET = os.getenv("GCS_OUTPUT_BUCKET")
 API_BASE_URL = os.getenv("API_BASE_URL")
 API_KEY = os.getenv("API_KEY")
-os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = os.getenv("GOOGLE_APPLICATION_CREDENTIALS")
 
 # --- Initialize Services ---
 haptic_generator = HapticGenerator()
@@ -48,7 +67,7 @@ async def process_message_async(session: aiohttp.ClientSession, message: pubsub_
 
         if not job_id or not video_filename:
             print(f"Error: Invalid message format: {message.data}")
-            message.nack() # <-- FIX: Removed await
+            message.nack()
             return
 
         print(f"▶️ Received job: {job_id}. Processing file: {video_filename}")
@@ -64,47 +83,64 @@ async def process_message_async(session: aiohttp.ClientSession, message: pubsub_
         
         await update_job_status(session, job_id, "COMPLETED", output_url=result.get("output_path"))
         print(f"✅ Finished processing job: {job_id}")
-        message.ack() # <-- FIX: Removed await
+        message.ack()
     except Exception as e:
         print(f"❌ Error processing job {job_id}: {e}")
         if job_id:
             await update_job_status(session, job_id, "FAILED")
-        message.ack() # <-- FIX: Removed await
+        message.ack()
 
 # --- Main Entry Point ---
-def main():
+async def main():
     """Sets up the event loop and starts the subscriber."""
-    loop = asyncio.new_event_loop()
-    asyncio.set_event_loop(loop)
-    subscriber = pubsub_v1.SubscriberClient()
-    subscription_path = subscriber.subscription_path(GCP_PROJECT_ID, SUBSCRIPTION_ID)
+    print("Subscriber task started. Attempting to create Pub/Sub client...")
+    
     try:
-        loop.run_until_complete(run_subscriber(loop, subscriber, subscription_path))
-    except KeyboardInterrupt:
-        print("\nShutting down...")
-    finally:
-        tasks = asyncio.all_tasks(loop=loop)
-        for task in tasks:
-            task.cancel()
-        group = asyncio.gather(*tasks, return_exceptions=True)
-        loop.run_until_complete(group)
-        loop.close()
-        print("Subscriber stopped and resources cleaned up.")
+        # This will now use the attached Service Account in prod,
+        # or the local key file in local dev.
+        subscriber = pubsub_v1.SubscriberClient()
+        subscription_path = subscriber.subscription_path(GCP_PROJECT_ID, SUBSCRIPTION_ID)
+        print(f"✅ Pub/Sub client created. Listening on {subscription_path}")
+    
+    except Exception as e:
+        print("==========================================================")
+        print("      🔥 CRITICAL SUBSCRIBER FAILURE 🔥")
+        print(f"Failed to initialize pubsub_v1.SubscriberClient().")
+        print(f"ERROR TYPE: {type(e)}")
+        print(f"ERROR: {e}")
+        import traceback
+        traceback.print_exc()
+        print("==========================================================")
+        return
+    
+    loop = asyncio.get_event_loop()
 
-async def run_subscriber(loop, subscriber, subscription_path):
-    """The main async function that manages the subscriber and HTTP session."""
     async with aiohttp.ClientSession() as http_session:
         def sync_callback_wrapper(message: pubsub_v1.subscriber.message.Message):
             loop.call_soon_threadsafe(
                 asyncio.create_task, process_message_async(http_session, message)
             )
+        
         streaming_pull_future = subscriber.subscribe(subscription_path, callback=sync_callback_wrapper)
-        print(f"🎧 Listening for messages on {subscription_path}...")
+        print(f"🎧 Now streaming messages from {subscription_path}...")
+        
         try:
             await asyncio.wrap_future(streaming_pull_future)
         except asyncio.CancelledError:
+            print("Subscriber pull future was cancelled.")
             streaming_pull_future.cancel()
             streaming_pull_future.result()
-
+        except Exception as e:
+            print(f"An error occurred in the subscriber pull: {e}")
+            streaming_pull_future.cancel()
+        finally:
+            print("Subscriber shutting down.")
+            
 if __name__ == "__main__":
-    main()
+    # This block is now primarily for local testing,
+    # as the 'main' function will be called by the FastAPI app.
+    print("Running subscriber directly (local test mode)...")
+    try:
+        asyncio.run(main())
+    except KeyboardInterrupt:
+        print("\nShutting down locally...")
